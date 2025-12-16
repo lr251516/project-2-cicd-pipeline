@@ -13,7 +13,7 @@ console.log('🧪 Running tests...');
 // In a real app, we would use Jest/Mocha and request/supertest.
 
 try {
-    assert.strictEqual(1 + 1, 5);
+    assert.strictEqual(2 + 2, 4);
     console.log('✅ Math still works');
 
     // Test environment variable logic
