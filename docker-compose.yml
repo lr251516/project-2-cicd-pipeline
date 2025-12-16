@@ -1,0 +1,241 @@
+version: "3.8"
+
+services:
+  app:
+    build:
+      context: ./app # Directorio donde está el Dockerfile
+      dockerfile: Dockerfile # Nombre del Dockerfile (opcional si se llama Dockerfile)
+
+    # container_name: devops-app
+    environment:
+      - NODE_ENV=production # Modo producción
+      - PORT=3000 # Puerto donde escucha la app
+      # Puedes usar archivos .env:
+      - DATABASE_URL=${DATABASE_URL}
+
+    # Cargar variables desde archivo .env
+    env_file:
+      - .env
+
+    # Política de reinicio
+    # - no: nunca reiniciar (default)
+    # - always: siempre reiniciar si se detiene
+    # - on-failure: solo reiniciar si falla (exit code != 0)
+    # - unless-stopped: siempre excepto si fue detenido manualmente
+    restart: unless-stopped
+
+    # Health check - Docker verificará si el contenedor está saludable
+    # Simplificado: solo verifica que el proceso de node esté corriendo
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1",
+        ]
+      interval: 10s # Ejecutar cada 10 segundos
+      timeout: 5s # Fallar si tarda más de 5s
+      retries: 3 # Intentar 3 veces antes de marcar como unhealthy
+      start_period: 10s # Dar 10s para que la app inicie antes de empezar checks
+
+    # Límites de recursos (previene que un contenedor consuma todo)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '0.50'          # Máximo 50% de un CPU core
+    #       memory: 512M          # Máximo 512MB de RAM
+    #     reservations:
+    #       cpus: '0.25'          # Mínimo garantizado
+    #       memory: 256M
+
+    # Volumes para desarrollo (hot reload)
+    # DESCOMENTAR para desarrollo local:
+    volumes:
+      - ./app:/app # Sincroniza código local con contenedor
+      - /app/node_modules # Excepto node_modules (usa del contenedor)
+
+    # Puertos - NO exponemos directamente, solo dentro de Docker network
+    # Nginx será el único punto de entrada
+    expose:
+      - "3000"
+
+    # Si quisieras acceder directamente (para debugging):
+    # ports:
+    #   - "3000:3000"
+
+    # Networks - especifica a qué redes se conecta este servicio
+    networks:
+      - aislada
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m" # Máximo tamaño de archivo de log
+        max-file: "3" # Mantener máximo 3 archivos de log
+
+  # --- Service: Nginx Reverse Proxy ---
+  nginx:
+    # Usar imagen oficial de Nginx (no necesitamos Dockerfile custom)
+    image: nginx:1.25-alpine # Alpine = ligero (~23MB)
+
+    container_name: devops-nginx
+
+    # Volumes - montar configuración custom de Nginx
+    volumes:
+      # Monta tu configuración en el directorio de configs de Nginx
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # :ro = read-only (seguridad: contenedor no puede modificar el archivo)
+
+      # Si tuvieras archivos estáticos:
+      # - ./static:/var/www/static:ro
+
+    # Ports - Exponer puerto 80 al host
+    # Nginx es el único servicio accesible desde fuera
+    ports:
+      - "80:80" # HTTP
+      # - "443:443"               # HTTPS (si configuras SSL)
+
+    # depends_on - orden de inicio
+    # Nginx inicia DESPUÉS de app
+    # ⚠️ IMPORTANTE: Esto NO espera a que app esté LISTA, solo que inicie
+    depends_on:
+      app:
+        condition: service_healthy # Esperar a que app pase health check
+        # Si no tienes healthcheck, usa: condition: service_started
+
+    restart: unless-stopped
+
+    # Health check para Nginx
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost/nginx-health",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    networks:
+      - app-network
+      - aislada
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ================================
+# NETWORKS
+# ================================
+# Define redes Docker personalizadas
+networks:
+  app-network:
+    driver: bridge
+  aislada:
+    driver: bridge
+# ================================
+# VOLUMES (Named Volumes)
+# ================================
+# Para datos persistentes (bases de datos, uploads, etc.)
+# volumes:
+#   db_data:                      # Volume para PostgreSQL
+#   redis_data:                   # Volume para Redis
+#   app_uploads:                  # Volume para archivos subidos
+
+# Ejemplo con base de datos:
+# services:
+#   postgres:
+#     image: postgres:15-alpine
+#     volumes:
+#       - db_data:/var/lib/postgresql/data
+#     environment:
+#       - POSTGRES_PASSWORD=secret
+#     networks:
+#       - app-network
+
+# ================================
+# COMANDOS ÚTILES
+# ================================
+
+# --- Básicos ---
+# Iniciar servicios:
+#   docker compose up
+#
+# Iniciar en background:
+#   docker compose up -d
+#
+# Detener servicios:
+#   docker compose down
+#
+# Detener y eliminar volumes:
+#   docker compose down -v
+#
+# Ver servicios corriendo:
+#   docker compose ps
+#
+# Ver logs:
+#   docker compose logs
+#   docker compose logs -f          # Follow (tiempo real)
+#   docker compose logs app         # Solo un servicio
+#   docker compose logs --tail=100  # Últimas 100 líneas
+
+# --- Build ---
+# Reconstruir imágenes:
+#   docker compose build
+#
+# Reconstruir sin caché:
+#   docker compose build --no-cache
+#
+# Build y up en un comando:
+#   docker compose up --build
+
+# --- Debugging ---
+# Ejecutar comando en contenedor:
+#   docker compose exec app sh
+#   docker compose exec nginx sh
+#
+# Ver configuración procesada:
+#   docker compose config
+#
+# Ver recursos usados:
+#   docker stats
+
+# --- Cleaning ---
+# Eliminar contenedores detenidos:
+#   docker compose rm
+#
+# Eliminar todo (contenedores, redes, imágenes):
+#   docker compose down --rmi all
+
+# --- Scaling ---
+# Escalar servicio (crear múltiples instancias):
+#   docker compose up -d --scale app=3
+# (Requiere configurar Nginx para load balancing)
+
+# ================================
+# TROUBLESHOOTING
+# ================================
+
+# Problema: "Can't connect to app from nginx"
+# Solución: Verificar que ambos estén en misma network
+#   docker network inspect project-1-docker-nginx_app-network
+
+# Problema: "Port already in use"
+# Solución: Cambiar puerto del host
+#   ports:
+#     - "8080:80"  # Usar puerto 8080 en lugar de 80
+
+# Problema: "Service unhealthy"
+# Solución: Ver logs del health check
+#   docker inspect devops-app
+
+# Problema: Cambios en código no se reflejan
+# Solución: Activar volumes para desarrollo (ver arriba)
+#   O reconstruir: docker compose up --build

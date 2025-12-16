@@ -1,0 +1,56 @@
+# .dockerignore es como .gitignore pero para Docker
+# Archivos/carpetas listados aquí NO se copiarán al contenedor
+# Esto hace el build más rápido y las imágenes más ligeras
+
+# Dependencias (se instalan con npm ci en el Dockerfile)
+node_modules
+npm-debug.log
+
+# Archivos de desarrollo
+.env
+.env.local
+.env.*.local
+
+# Testing
+coverage
+.nyc_output
+*.test.js
+*.spec.js
+__tests__
+
+# Git
+.git
+.gitignore
+
+# IDEs
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Documentación y markdown (no necesarios en runtime)
+README.md
+*.md
+
+# Archivos de CI/CD
+.github
+.gitlab-ci.yml
+Jenkinsfile
+
+# Logs
+logs
+*.log
+
+# Build outputs (si usas TypeScript u otros builders)
+dist
+build
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml

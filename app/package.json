@@ -1,0 +1,22 @@
+{
+  "name": "devops-learning-app",
+  "version": "1.0.0",
+  "description": "Simple Node.js app for learning Docker and Nginx",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "test": "node test.js",
+    "dev": "node app.js"
+  },
+  "keywords": [
+    "devops",
+    "docker",
+    "nginx",
+    "learning"
+  ],
+  "author": "DevOps Learner",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
